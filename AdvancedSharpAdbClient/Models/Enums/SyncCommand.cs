@@ -67,6 +67,26 @@ namespace AdvancedSharpAdbClient.Models
         /// <summary>
         /// Stat a list v2.
         /// </summary>
-        LST2
+        LST2,
+
+        /// <summary>
+        /// List the files in a folder v2.
+        /// </summary>
+        LIS2,
+
+        /// <summary>
+        /// A directory entry v2.
+        /// </summary>
+        DNT2,
+
+        /// <summary>
+        /// Send a file to device v2.
+        /// </summary>
+        SND2,
+
+        /// <summary>
+        /// Retrieve a file from device v2.
+        /// </summary>
+        RCV2,
     }
 }

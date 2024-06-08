@@ -24,7 +24,7 @@ namespace AdvancedSharpAdbClient.Models
                 return [0, 0, 0, 0];
             }
 
-            if (command is < SyncCommand.STAT or > SyncCommand.LST2)
+            if (command is < SyncCommand.STAT or > SyncCommand.RCV2)
             {
                 throw new ArgumentOutOfRangeException(nameof(command), $"{command} is not a valid sync command");
             }
