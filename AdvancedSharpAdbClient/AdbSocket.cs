@@ -167,6 +167,34 @@ namespace AdvancedSharpAdbClient
         }
 
         /// <inheritdoc/>
+        public void SendSyncRequest(SyncCommand command, string path, SyncFlag syncFlag)
+        {
+            ExceptionExtensions.ThrowIfNull(path);
+            byte[] pathBytes = AdbClient.Encoding.GetBytes(path);
+            // The message structure is:
+            // First four bytes: command
+            // Next four bytes: length of the path
+            // Final bytes: path
+            byte[] commandBytes = command.GetBytes();
+
+            byte[] lengthBytes = BitConverter.GetBytes(pathBytes.Length);
+            byte[] syncFlagBytes = BitConverter.GetBytes((UInt32)syncFlag);
+
+            if (!BitConverter.IsLittleEndian)
+            {
+                // Convert from big endian to little endian
+                Array.Reverse(lengthBytes);
+                Array.Reverse(syncFlagBytes);
+            }
+
+            _ = Write(commandBytes);
+            _ = Write(lengthBytes);
+            _ = Write(pathBytes);
+            _ = Write(commandBytes);
+            _ = Write(syncFlagBytes);
+        }
+
+        /// <inheritdoc/>
         public void SendSyncRequest(SyncCommand command, int length)
         {
             // The message structure is:
@@ -185,6 +213,26 @@ namespace AdvancedSharpAdbClient
 
             _ = Write(commandBytes);
             _ = Write(lengthBytes);
+        }
+
+        public void SendSyncRequest(SyncCommand command, SyncFlag syncFlag)
+        {
+            // The message structure is:
+            // First four bytes: command
+            // Next four bytes: length of the path
+            // Final bytes: path
+            byte[] commandBytes = command.GetBytes();
+
+            byte[] syncFlagBytes = BitConverter.GetBytes((UInt32)syncFlag);
+
+            if (!BitConverter.IsLittleEndian)
+            {
+                // Convert from big endian to little endian
+                Array.Reverse(syncFlagBytes);
+            }
+
+            _ = Write(commandBytes);
+            _ = Write(syncFlagBytes);
         }
 
         /// <inheritdoc/>

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Text;
 
@@ -311,6 +312,122 @@ namespace AdvancedSharpAdbClient
             {
                 IsOutdate = true;
                 IsProcessing = false;
+            }
+        }
+
+        public virtual void PullV2(string remoteFilePath, CompressionType compressionType, Stream stream,
+            Action<SyncProgressChangedEventArgs>? callback = null, in bool isCancelled = false)
+        {
+            var syncFlag = ResolveCompressionType(compressionType);
+            PullV2(remoteFilePath, syncFlag, stream, callback, isCancelled);
+        }
+
+        public virtual void PullV2(string remoteFilePath, SyncFlag syncFlag, Stream stream, Action<SyncProgressChangedEventArgs>? callback = null, in bool isCancelled = false)
+        {
+            if (IsProcessing) { throw new InvalidOperationException($"The {nameof(SyncService)} is currently processing a request. Please {nameof(Clone)} a new {nameof(ISyncService)} or wait until the process is finished."); }
+
+            ExceptionExtensions.ThrowIfNull(remoteFilePath);
+            ExceptionExtensions.ThrowIfNull(stream);
+
+            if (IsOutdate) { Reopen(); }
+
+            // Gets file information, including the file size, used to calculate the total amount of bytes to receive.
+            FileStatistics stat = Stat(remoteFilePath);
+            int totalBytesToProcess = stat.Size;
+            long totalBytesRead = 0;
+
+            byte[] buffer = new byte[MaxBufferSize];
+
+            try
+            {
+                Socket.SendSyncRequest(SyncCommand.RCV2, remoteFilePath, syncFlag);
+                IsProcessing = true;
+
+                while (!isCancelled)
+                {
+                    SyncCommand response = Socket.ReadSyncResponse();
+
+                    switch (response)
+                    {
+                        case SyncCommand.DONE:
+                            goto finish;
+                        case SyncCommand.FAIL:
+                            string message = Socket.ReadSyncString();
+                            throw new AdbException($"Failed to pull '{remoteFilePath}'. {message}");
+                        case not SyncCommand.DATA:
+                            throw new AdbException($"The server sent an invalid response {response}");
+                    }
+
+                    // The first 4 bytes contain the length of the data packet
+                    byte[] reply = new byte[4];
+                    _ = Socket.Read(reply);
+
+                    int size = reply[0] | (reply[1] << 8) | (reply[2] << 16) | (reply[3] << 24);
+
+                    if (size > MaxBufferSize)
+                    {
+                        throw new AdbException($"The adb server is sending {size} bytes of data, which exceeds the maximum chunk size {MaxBufferSize}");
+                    }
+
+                    // now read the length we received
+#if HAS_BUFFERS
+                    _ = Socket.Read(buffer.AsSpan(0, size));
+                    stream.Write(buffer.AsSpan(0, size));
+#else
+                    _ = Socket.Read(buffer, size);
+                    stream.Write(buffer, 0, size);
+#endif
+                    totalBytesRead += size;
+
+                    // Let the caller know about our progress, if requested
+                    callback?.Invoke(new SyncProgressChangedEventArgs(totalBytesRead, totalBytesToProcess));
+                }
+
+                finish: return;
+            }
+            finally
+            {
+                IsOutdate = true;
+                IsProcessing = false;
+            }
+        }
+
+        public SyncFlag ResolveCompressionType(CompressionType compressionType)
+        {
+            switch (compressionType)
+            {
+                case CompressionType.None:
+                    return SyncFlag.None;
+
+                case CompressionType.Any:
+                    if (Device.Features.Contains("sendrecv_v2_zstd"))
+                    {
+                        return SyncFlag.Zstd;
+                    }
+
+                    if (Device.Features.Contains("sendrecv_v2_lz4"))
+                    {
+                        return SyncFlag.LZ4;
+                    }
+
+                    if (Device.Features.Contains("sendrecv_v2_brotli"))
+                    {
+                        return SyncFlag.Brotli;
+                    }
+
+                    return SyncFlag.None;
+
+                case CompressionType.Brotli:
+                    return SyncFlag.Brotli;
+
+                case CompressionType.LZ4:
+                    return SyncFlag.LZ4;
+
+                case CompressionType.Zstd:
+                    return SyncFlag.Zstd;
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(compressionType), compressionType, "Invalid compression type");
             }
         }
 

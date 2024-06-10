@@ -92,6 +92,33 @@ namespace AdvancedSharpAdbClient
         }
 
         /// <inheritdoc/>
+        public async Task SendSyncRequestAsync(SyncCommand command, string path, SyncFlag syncFlag, CancellationToken cancellationToken = default)
+        {
+            ExceptionExtensions.ThrowIfNull(path);
+            byte[] pathBytes = AdbClient.Encoding.GetBytes(path);
+            // The message structure is:
+            // First four bytes: command
+            // Next four bytes: length of the path
+            // Final bytes: path
+            byte[] commandBytes = command.GetBytes();
+
+            byte[] lengthBytes = BitConverter.GetBytes(pathBytes.Length);
+            byte[] syncFlagBytes = BitConverter.GetBytes((UInt32)syncFlag);
+
+            if (!BitConverter.IsLittleEndian)
+            {
+                // Convert from big endian to little endian
+                Array.Reverse(lengthBytes);
+            }
+
+            _ = await WriteAsync(commandBytes, cancellationToken).ConfigureAwait(false);
+            _ = await WriteAsync(lengthBytes, cancellationToken).ConfigureAwait(false);
+            _ = await WriteAsync(pathBytes, cancellationToken).ConfigureAwait(false);
+            _ = await WriteAsync(commandBytes, cancellationToken).ConfigureAwait(false);
+            _ = await WriteAsync(syncFlagBytes, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <inheritdoc/>
         public async Task SendSyncRequestAsync(SyncCommand command, int length, CancellationToken cancellationToken = default)
         {
             // The message structure is:

@@ -209,7 +209,21 @@ namespace AdvancedSharpAdbClient
             string reply = socket.ReadString();
 
             string[] data = reply.Split(separator, StringSplitOptions.RemoveEmptyEntries);
-            return data.Select(x => new DeviceData(x));
+
+            foreach(var dataString in data)
+            {
+                var device = new DeviceData(dataString);
+
+                if (device.State == DeviceState.Online)
+                {
+                    var features = GetFeatureSet(device);
+                    yield return device with { Features = device.Features.Union(features).ToArray() };
+                }
+                else
+                {
+                    yield return device;
+                }
+            }
         }
 
         /// <inheritdoc/>

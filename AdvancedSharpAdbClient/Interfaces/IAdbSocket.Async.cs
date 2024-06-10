@@ -77,6 +77,16 @@ namespace AdvancedSharpAdbClient
         Task SendSyncRequestAsync(SyncCommand command, int length, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Asynchronously sends a sync request to the device.
+        /// </summary>
+        /// <param name="command">The command to send.</param>
+        /// <param name="path">The path of the file on which the command should operate.</param>
+        /// <param name="syncFlag">The <see cref="SyncFlag"/> to send with the request.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the task.</param>
+        /// <returns>A <see cref="Task"/> which represents the asynchronous operation.</returns>
+        public Task SendSyncRequestAsync(SyncCommand command, string path, SyncFlag syncFlag, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Asynchronously sends a request to the Android Debug Bridge.To read the response, call
         /// <see cref="ReadAdbResponseAsync(CancellationToken)"/>.
         /// </summary>

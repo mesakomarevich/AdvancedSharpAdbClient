@@ -210,6 +210,88 @@ namespace AdvancedSharpAdbClient
             }
         }
 
+
+        /// <inheritdoc/>
+        public virtual Task PullV2Async(string remotePath, CompressionType compressionType, Stream stream, Action<SyncProgressChangedEventArgs>? callback = null, CancellationToken cancellationToken = default)
+        {
+            var syncFlag = ResolveCompressionType(compressionType);
+            return PullV2Async(remotePath, syncFlag, stream, callback, cancellationToken);
+        }
+
+        /// <inheritdoc/>
+        public virtual async Task PullV2Async(string remotePath, SyncFlag syncFlag, Stream stream, Action<SyncProgressChangedEventArgs>? callback = null, CancellationToken cancellationToken = default)
+        {
+            if (IsProcessing) { throw new InvalidOperationException($"The {nameof(SyncService)} is currently processing a request. Please {nameof(Clone)} a new {nameof(ISyncService)} or wait until the process is finished."); }
+
+            ExceptionExtensions.ThrowIfNull(remotePath);
+            ExceptionExtensions.ThrowIfNull(stream);
+
+            if (IsOutdate) { await ReopenAsync(cancellationToken).ConfigureAwait(false); }
+
+            // Gets file information, including the file size, used to calculate the total amount of bytes to receive.
+            FileStatistics stat = await StatAsync(remotePath, cancellationToken).ConfigureAwait(false);
+            long totalBytesToProcess = stat.Size;
+            long totalBytesRead = 0;
+
+            byte[] buffer = new byte[MaxBufferSize];
+
+            try
+            {
+                await Socket.SendSyncRequestAsync(SyncCommand.RCV2, remotePath, syncFlag, cancellationToken).ConfigureAwait(false);
+                IsProcessing = true;
+
+                while (true)
+                {
+                    SyncCommand response = await Socket.ReadSyncResponseAsync(cancellationToken).ConfigureAwait(false);
+
+                    switch (response)
+                    {
+                        case SyncCommand.DONE:
+                            goto finish;
+                        case SyncCommand.FAIL:
+                            string message = await Socket.ReadSyncStringAsync(cancellationToken).ConfigureAwait(false);
+                            throw new AdbException($"Failed to pull '{remotePath}'. {message}");
+                        case not SyncCommand.DATA:
+                            throw new AdbException($"The server sent an invalid response {response}");
+                    }
+
+                    // The first 4 bytes contain the length of the data packet
+                    byte[] reply = new byte[4];
+                    _ = await Socket.ReadAsync(reply, cancellationToken).ConfigureAwait(false);
+
+                    int size = reply[0] | (reply[1] << 8) | (reply[2] << 16) | (reply[3] << 24);
+
+                    if (size > MaxBufferSize)
+                    {
+                        throw new AdbException($"The adb server is sending {size} bytes of data, which exceeds the maximum chunk size {MaxBufferSize}");
+                    }
+
+                    // now read the length we received
+#if HAS_BUFFERS
+                    await Socket.ReadAsync(buffer.AsMemory(0, size), cancellationToken).ConfigureAwait(false);
+                    await stream.WriteAsync(buffer.AsMemory(0, size), cancellationToken).ConfigureAwait(false);
+#else
+                    await Socket.ReadAsync(buffer, size, cancellationToken).ConfigureAwait(false);
+                    await stream.WriteAsync(buffer, 0, size, cancellationToken).ConfigureAwait(false);
+#endif
+                    totalBytesRead += size;
+
+                    // Let the caller know about our progress, if requested
+                    callback?.Invoke(new SyncProgressChangedEventArgs(totalBytesRead, totalBytesToProcess));
+
+                    // check if we're canceled
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                finish: return;
+            }
+            finally
+            {
+                IsOutdate = true;
+                IsProcessing = false;
+            }
+        }
+
 #if HAS_WINRT
         /// <inheritdoc/>
         [ContractVersion(typeof(UniversalApiContract), 65536u)]

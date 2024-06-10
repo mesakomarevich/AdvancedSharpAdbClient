@@ -71,6 +71,14 @@ namespace AdvancedSharpAdbClient
         void SendSyncRequest(SyncCommand command, int length);
 
         /// <summary>
+        /// Sends a sync request to the device.
+        /// </summary>
+        /// <param name="command">The command to send.</param>
+        /// <param name="path">The path of the file on which the command should operate.</param>
+        /// <param name="syncFlag">The <see cref="SyncFlag"/> to send with the request.</param>
+        void SendSyncRequest(SyncCommand command, string path, SyncFlag syncFlag);
+
+        /// <summary>
         /// Sends a request to the Android Debug Bridge.To read the response, call
         /// <see cref="ReadAdbResponse()"/>.
         /// </summary>

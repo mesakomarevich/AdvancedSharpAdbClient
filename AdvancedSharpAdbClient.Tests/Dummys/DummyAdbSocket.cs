@@ -60,6 +60,10 @@ namespace AdvancedSharpAdbClient.Tests
         public void SendSyncRequest(SyncCommand command, string path) => SyncRequests.Add((command, path));
 
         public void SendSyncRequest(SyncCommand command, int length) => SyncRequests.Add((command, length.ToString()));
+        public void SendSyncRequest(SyncCommand command, string path, SyncFlag syncFlag)
+        {
+            throw new NotImplementedException();
+        }
 
         public void SendSyncRequest(SyncCommand command, string path, UnixFileStatus permission) => SyncRequests.Add((command, $"{path},{(int)permission}"));
 
@@ -216,6 +220,8 @@ namespace AdvancedSharpAdbClient.Tests
             await Task.Yield();
             SendSyncRequest(command, length);
         }
+
+        public Task SendSyncRequestAsync(SyncCommand command, string path, SyncFlag syncFlag, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
         public async Task SendAdbRequestAsync(string request, CancellationToken cancellationToken = default)
         {
